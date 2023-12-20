@@ -12,6 +12,7 @@ def leer_archivo_fluxlog(ruta_archivo):
 
 def procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida):
     datos_totales = []
+
     for ruta_serial_carpeta, carpetas, archivos in os.walk(ruta_base):
         for archivo_fluxlog in archivos:
             if archivo_fluxlog.startswith(nombre_serial) and archivo_fluxlog.endswith('.txt'):
@@ -23,7 +24,7 @@ def procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida):
         datos_totales.sort(key=lambda x: (x[0], x[1]))  # Ordena por Fecha y Hora
 
         # Guarda el archivo consolidado
-        nombre_archivo_salida = f'Datos_Procesados_Vinagre3.txt'
+        nombre_archivo_salida = f'Datos_Procesados_{nombre_serial}.txt'
         ruta_archivo_salida = os.path.join(ruta_salida, nombre_archivo_salida)
 
         with open(ruta_archivo_salida, 'w') as file_salida:
@@ -33,7 +34,7 @@ def procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida):
                 fecha_hora = f"{linea[0]} {linea[1]}"
                 combined_datetime = datetime.strptime(fecha_hora, '%Y-%m-%d %H:%M:%S')
                 flux_ton_dias = '{:.2f}'.format(float(linea[2]) * 952397)
-                file_salida.write(f"{linea[0]} {linea[1]}\t{linea[2]}\t{flux_ton_dias}\n")
+                file_salida.write(f"{linea[0]}\t{linea[1]}\t{linea[2]}\t{flux_ton_dias}\n")
 
         print(f'Datos consolidados guardados en: {ruta_archivo_salida}')
         return ruta_archivo_salida
@@ -50,29 +51,31 @@ def graficar_datos(datos, ruta_grafica, fecha_inicio=None, fecha_fin=None):
     flux_ton_dias = [float(linea[3]) for linea in datos]
 
     fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-    fig.suptitle(f'Gráfico {datos[0][4]} SO2')
+    fig.suptitle(f'Gráfico {datos[0][2]} SO2')
 
+    # Gráfico de Fecha vs Flux[Kg/s]
     axs[0].plot(fechas_hora, flux_values, marker='o', linestyle='-', label='Flux[Kg/s]')
     axs[0].set_ylabel('Flux[Kg/s]')
     axs[0].grid(True)
+    axs[0].legend()
 
+    # Gráfico de Fecha vs Flux[Ton/d]
     axs[1].plot(fechas_hora, flux_ton_dias, marker='o', linestyle='-', label='Flux[Kg/s] * 952397')
     axs[1].set_ylabel('Flux[Kg/s] * 952397')
     axs[1].set_xlabel('Fecha y Hora')
     axs[1].grid(True)
-
-    axs[0].legend()
     axs[1].legend()
 
     axs[0].xaxis.set_major_locator(plt.MaxNLocator(10))
     axs[0].xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: datetime.strptime(x, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y')))
     
     # Guarda la gráfica
-    nombre_grafica = f'Grafica_{datos[0][4]}_SO2.png'
+    nombre_grafica = f'Grafica_{datos[0][2]}_SO2.png'
     ruta_grafica = os.path.join(ruta_grafica, nombre_grafica)
     plt.savefig(ruta_grafica, bbox_inches='tight')
     print(f'Gráfica guardada en: {ruta_grafica}')
     plt.show()
+
 
 if __name__ == "__main__":
     ruta_base = input("Ingrese la ruta del directorio base (por ejemplo, Pruebas/): ")
