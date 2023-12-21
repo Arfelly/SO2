@@ -28,7 +28,7 @@ def procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida):
         ruta_archivo_salida = os.path.join(ruta_salida, nombre_archivo_salida)
 
         with open(ruta_archivo_salida, 'w') as file_salida:
-            file_salida.write("Fecha\tHora\tFlux[Kg/s]\tFlux[Ton/d]\n")
+            file_salida.write("tiempo\tflujoKgs\tfluxTond\n")
 
             for linea in datos_totales:
                 fecha_hora = f"{linea[0]} {linea[1]}"

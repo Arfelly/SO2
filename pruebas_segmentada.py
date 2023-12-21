@@ -1,6 +1,8 @@
 import os
 from datetime import datetime
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.dates import DateFormatter
 
 def leer_archivo_fluxlog(ruta_archivo):
     # Lee el archivo FluxLog y retorna una lista de listas con las columnas deseadas
@@ -24,17 +26,17 @@ def procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida):
         datos_totales.sort(key=lambda x: (x[0], x[1]))  # Ordena por Fecha y Hora
 
         # Guarda el archivo consolidado
-        nombre_archivo_salida = f'Datos_Procesados_{nombre_serial}.txt'
+        nombre_archivo_salida = f'Datos_Vinagre3.txt'
         ruta_archivo_salida = os.path.join(ruta_salida, nombre_archivo_salida)
 
         with open(ruta_archivo_salida, 'w') as file_salida:
-            file_salida.write("fechaHora\tflujoKgs\tflujoTond\n")
+            file_salida.write("tiempo\tflujoKgs\tflujoTond\n")
 
             for linea in datos_totales:
-                fecha_hora = f"{linea[0]} {linea[1]}"
-                Fechas_H = datetime.strptime(fecha_hora, '%Y-%m-%d %H:%M:%S')
+                Fecha_H = f"{linea[0]} {linea[1]}"
+                tiempo = datetime.strptime(Fecha_H, '%Y-%m-%d %H:%M:%S')
                 flux_ton_dias = '{:.2f}'.format(float(linea[2]) * 952397)
-                file_salida.write(f"{Fechas_H}\t{linea[2]}\t{flux_ton_dias}\n")
+                file_salida.write(f"{tiempo}\t{linea[2]}\t{flux_ton_dias}\n")
 
         print(f'Datos consolidados guardados en: {ruta_archivo_salida}')
         return ruta_archivo_salida
@@ -42,78 +44,112 @@ def procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida):
         print(f'No se encontraron datos para {nombre_serial}')
         return None
 
-def cargar_datos_desde_archivo(archivos_txt):
-    with open(archivos_txt, 'r') as file:
-        # Saltar la primera línea que contiene los encabezados
-        next(file)
-        fechaHora, flujoKgs, flujoTond = [], [], []
-        for linea in file:
-            valores = linea.split()
-            fechaHora.append(datetime.strptime(valores[0], '%Y-%m-%d %H:%M:%S'))
-            flujoKgs.append(float(valores[1])) 
-            flujoTond.append(float(valores[2]))
-    return fechaHora, flujoKgs, flujoTond
+def cargar_archivos_consolidados(archivos_consolidados):
 
-def procesar_archivo_txt(archivo, ruta_archivo_salida):
-    ruta_archivo = os.path.join(ruta_archivo_salida, archivo)
-    fechaHora, flujoKgs, flujoTond = cargar_datos_desde_archivo(ruta_archivo)
+    with open(archivos_consolidados, 'r') as fila:
+        next(fila)
 
-def graficar_datos(datos, ruta_grafica, fecha_inicio=None, fecha_fin=None):
-    if fecha_inicio and fecha_fin:
-        datos = [linea for linea in datos if fecha_inicio <= linea[0] <= fecha_fin]
-
-    Fechas = [f"{linea[0]} {linea[1]}" for linea in datos]
-    flux_values = [float(linea[2]) for linea in datos]
-    flux_ton_dias = [float(linea[3]) for linea in datos]
-
-    fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
-    fig.suptitle(f'Gráfico {datos[0][2]} SO2')
-
-    # Gráfico de Fecha vs Flux[Kg/s]
-    axs[0].plot(Fechas, flux_values, marker='o', linestyle='-', label='Flux[Kg/s]')
-    axs[0].set_ylabel('Flux[Kg/s]')
-    axs[0].grid(True)
-    axs[0].legend()
-
-    # Gráfico de Fecha vs Flux[Ton/d]
-    axs[1].plot(fechas_hora, flux_ton_dias, marker='o', linestyle='-', label='Flux[Kg/s] * 952397')
-    axs[1].set_ylabel('Flux[Kg/s] * 952397')
-    axs[1].set_xlabel('Fecha y Hora')
-    axs[1].grid(True)
-    axs[1].legend()
-
-    axs[0].xaxis.set_major_locator(plt.MaxNLocator(10))
-    axs[0].xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: datetime.strptime(x, '%Y-%m-%d %H:%M:%S').strftime('%d/%m/%Y')))
+        data = [line.strip().split('\t') for line in fila]
+        tiempo = [datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S") for row in data]
+        flujoKgs = [float(row[1]) for row in data]
+        flujoTond = [float(row[2]) for row in data]
     
-    # Guarda la gráfica
-    nombre_grafica = f'Grafica_{datos[0][2]}_SO2.png'
-    ruta_grafica = os.path.join(ruta_grafica, nombre_grafica)
-    plt.savefig(ruta_grafica, bbox_inches='tight')
-    print(f'Gráfica guardada en: {ruta_grafica}')
-    plt.show()
+    return tiempo, flujoKgs, flujoTond
 
+def calcular_promedio_movil(datos, ventana=24):
+    return np.convolve(datos, np.ones(ventana) / ventana, mode='valid')
+
+def configurar_grafico(ax, fechas, datos, nombre, color):
+    ax.plot(fechas, datos, marker='o', linestyle='-', markersize=3, label=nombre, color=color, alpha=0.5)
+
+def configurar_ticks_y_formato_fecha(axs, fechas, ticks_cada_n=30):
+    for ax in axs:
+        ax.set_xticks(fechas[::ticks_cada_n])
+        ax.xaxis.set_major_formatter(DateFormatter('%d-%b'))
+
+def dibujar_linea_punteada(ax, fechas, promedio_movil, alpha=0.5):
+    ax.plot(fechas, [np.nan]*23 + promedio_movil.tolist(), 'r--', alpha=alpha)
+
+def graficar_desde_txt(archivo, ruta_archivo_salida):
+    ruta_archivo = os.path.join(ruta_archivo_salida, archivo)
+    tiempo, flujoKgs, flujoTond = cargar_archivos_consolidados(ruta_archivo)
+
+    if tiempo:  # Verificar si se cargaron fechas correctamente
+        promedio_flujoKgs = calcular_promedio_movil(flujoKgs)
+        promedio_flujoTond = calcular_promedio_movil(flujoTond)
+        
+        carpeta_salida = f'Graficos_SO2'
+        directorio_salida = os.path.join(ruta_salida, carpeta_salida)
+        os.makedirs(directorio_salida, exist_ok=True)
+
+        fig, axs = plt.subplots(2, 1, figsize=(8, 7), sharex=False)
+        fig.suptitle(f'Vinagre3', y=0.92)
+        
+        
+        configurar_grafico(axs[0], tiempo, flujoKgs, 'Flujo Kg/s', (0,0,153/255))
+        configurar_grafico(axs[1], tiempo, flujoTond, 'Flujo Ton/días', (0,153/255,0))
+
+        #for ax in axs:
+        #    ax.set_xticks(ax.get_xticks())
+        #    ax.set_xticklabels(ax.get_xticklabels(), rotation=20)
+
+        configurar_ticks_y_formato_fecha(axs, tiempo)
+        dibujar_linea_punteada(axs[0], tiempo, promedio_flujoKgs)
+        dibujar_linea_punteada(axs[1], tiempo, promedio_flujoTond)
+
+        maximos_diarios_Kgs = [max(flujoKgs[i:i+31]) for i in range(0, len(flujoKgs), 31)]
+        maximos_diarios_Tond = [max(flujoTond[i:i+31]) for i in range(0, len(flujoTond), 31)]
+
+        axs[0].plot(tiempo[::31], maximos_diarios_Kgs, 'k--', alpha=0.3, label='Máx. diario Kg/s')
+        axs[1].plot(tiempo[::31], maximos_diarios_Tond, label='Máx. diario Ton/días')
+
+        # Anotar los valores máximos con inclinación de 20 grados
+        for i, fecha in enumerate(tiempo[::31]):
+            axs[0].annotate(f'{maximos_diarios_Kgs[i]:.2f}',
+                            (fecha, maximos_diarios_Kgs[i]),
+                            textcoords="offset points",
+                            xytext=(10, 10),
+                            ha='center',
+                            fontsize=8,
+                            )
+            
+            axs[1].annotate(f'{maximos_diarios_Tond[i]:.2e}',
+                            (fecha, maximos_diarios_Tond[i]),
+                            textcoords="offset points",
+                            xytext=(10, 10),
+                            ha='center',
+                            fontsize=8,
+                            )
+
+        # Crear el nombre del archivo de salida
+        nombre_archivo_salida = f'gráfico_Vinagre3.png'
+        ruta_guardado = os.path.join(directorio_salida, nombre_archivo_salida)
+        plt.savefig(ruta_guardado, bbox_inches='tight', dpi=300)
+        
+        plt.close()
 
 if __name__ == "__main__":
     ruta_base = input("Ingrese la ruta del directorio base (por ejemplo, Pruebas/): ")
     nombre_serial = "FluxLog_2011050M1_"
     ruta_salida = input("Ingrese la ruta de salida para los datos consolidados: ")
 
-    ruta_grafica = os.path.join(ruta_salida, 'Graficos')
-    os.makedirs(ruta_grafica, exist_ok=True)
-
     # Procesar carpeta serial y guardar datos consolidados
     datos_consolidados = procesar_carpeta_serial(ruta_base, nombre_serial, ruta_salida)
 
-    if datos_consolidados:
-        # Graficar datos
-        opcion_graficar = input("¿Desea graficar los datos? (Sí/No): ").lower()
-        
-        if opcion_graficar == 'sí' or opcion_graficar == 'si':
-            opcion_rango_fechas = input("¿Quiere graficar por rango de fechas? (Sí/No): ").lower()
+    graficar_desde_txt(datos_consolidados, ruta_salida)
 
-            if opcion_rango_fechas == 'sí' or opcion_rango_fechas == 'si':
-                fecha_inicio = input("Ingrese la fecha de inicio (YYYY-MM-DD): ")
-                fecha_fin = input("Ingrese la fecha de fin (YYYY-MM-DD): ")
-                graficar_datos(datos_consolidados, ruta_grafica, fecha_inicio, fecha_fin)
-            else:
-                graficar_datos(datos_consolidados, ruta_grafica)
+    #if datos_consolidados:
+    #    # Graficar datos
+    #    opcion_graficar = input("¿Desea graficar los datos? (Sí/No): ").lower()
+#
+    #    graficar_desde_txt(datos_consolidados, ruta_salida)
+#
+    #    if opcion_graficar == 'sí' or opcion_graficar == 'si':
+    #        opcion_rango_fechas = input("¿Quiere graficar por rango de fechas? (Sí/No): ").lower()
+#
+    #        if opcion_rango_fechas == 'sí' or opcion_rango_fechas == 'si':
+    #            fecha_inicio = input("Ingrese la fecha de inicio (YYYY-MM-DD): ")
+    #            fecha_fin = input("Ingrese la fecha de fin (YYYY-MM-DD): ")
+    #            graficar_desde_txt(datos_consolidados, ruta_salida, fecha_inicio, fecha_fin)
+    #        else:
+    #            graficar_desde_txt(datos_consolidados, ruta_salida)
